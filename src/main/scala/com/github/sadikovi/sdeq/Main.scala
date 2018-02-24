@@ -36,7 +36,10 @@ import com.mongodb.spark.config.WriteConfig
  * You need to provide following options (use --conf OPT=VALUE on a command line or
  * spark-defaults.conf).
  * - "spark.sdeq.mongodb.uri", Mongo URI, e.g. mongodb://127.0.0.1:27017
- * - "spark.sdeq.history.files", path to the history files/directory
+ * - "spark.sdeq.history.files", optional path to the history files/directory
+ * - "spark.sdeq.kafka.servers", list of kafka servers to connect
+ * - "spark.sdeq.kafka.topic", kafka topic to connect
+ * - "spark.sdeq.train.interval", training interval in seconds
  */
 object Main extends Logging {
   val DATABASE = "recommendations"
@@ -47,15 +50,17 @@ object Main extends Logging {
     val spark = SparkSession.builder().appName("Recommendations").getOrCreate()
     import spark.implicits._
 
-    val uri = spark.conf.get("spark.sdeq.mongodb.uri")
-    val kafkaServers = spark.conf.get("spark.sdeq.kafka.servers")
-    val kafkaTopic = spark.conf.get("spark.sdeq.kafka.topic")
-    val trainingInterval = spark.conf.get("spark.sdeq.train.interval").toInt
+    // parse configuration options
+    val uri = conf(spark, "spark.sdeq.mongodb.uri", "mongodb://127.0.0.1:27017")
+    val kafkaServers = conf(spark, "spark.sdeq.kafka.servers", "kafka:9092")
+    val kafkaTopic = conf(spark, "spark.sdeq.kafka.topic", "updates")
+    val trainingInterval = conf(spark, "spark.sdeq.train.interval", s"${5 * 60}").toInt
 
     require(trainingInterval >= 1, "Training interval must be greater than 1 second")
 
+    // perform initial loading of the data
     val client = new MongoClient(new MongoClientURI(uri))
-    val items = reloadData(spark, client, uri)
+    var items = reloadData(spark, client, uri)
     logInfo(s"Loaded ${items.count} records of items")
 
     // start streaming job
@@ -89,6 +94,8 @@ object Main extends Logging {
     try {
       while (true) {
         Thread.sleep(trainingInterval * 1000L)
+        logInfo("Updating similarity matrix")
+        items = reloadData(spark, client, uri)
       }
     } catch {
       case _: Throwable => {
@@ -109,7 +116,7 @@ object Main extends Logging {
   def reloadData(spark: SparkSession, client: MongoClient, uri: String): Dataset[Similarity] = {
     import spark.implicits._
 
-    val historyFiles = Try(spark.conf.get("spark.sdeq.history.files")).getOrElse("")
+    val historyFiles = conf(spark, "spark.sdeq.history.files", "")
     if (loadHistoryFiles(client)) {
       logWarning(s"Could not locate database $DATABASE or collection $CP_COLLECTION, " +
         s"loading history files from $historyFiles")
@@ -135,6 +142,11 @@ object Main extends Logging {
   // =============================
   // == Miscellaneous functions ==
   // =============================
+
+  /** Shortcut for getting configuration option */
+  private def conf(spark: SparkSession, key: String, default: String): String = {
+    spark.conf.getOption(key).getOrElse(default)
+  }
 
   /** Check if we need to load history files */
   private def loadHistoryFiles(client: MongoClient): Boolean = {
@@ -180,6 +192,7 @@ object Main extends Logging {
       option("collection", coll).mode("overwrite").save()
   }
 
+  /** Shortcut for writing data into mongodb from a stream */
   private def writeMongoStream(
       ds: Dataset[Record],
       uri: String,
