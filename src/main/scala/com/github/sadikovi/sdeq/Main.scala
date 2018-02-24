@@ -20,10 +20,11 @@ import scala.collection.mutable
 import scala.collection.JavaConverters._
 import scala.util.Try
 
+import org.apache.log4j.{Level, Logger}
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.{DataFrame, Dataset, ForeachWriter, SparkSession}
 import org.apache.spark.sql.streaming.StreamingQuery
-import org.apache.spark.sql.functions.col
+import org.apache.spark.sql.functions.{col, split, trim}
 import org.apache.spark.sql.types.{StringType, StructField, StructType}
 import org.bson.Document
 import com.mongodb.{MongoClient, MongoClientURI}
@@ -47,11 +48,13 @@ object Main extends Logging {
   val SIM_COLLECTION = "similarity"
 
   def main(args: Array[String]): Unit = {
+    Logger.getLogger("org.apache.spark").setLevel(Level.WARN)
+
     val spark = SparkSession.builder().appName("Recommendations").getOrCreate()
     import spark.implicits._
 
     // parse configuration options
-    val uri = conf(spark, "spark.sdeq.mongodb.uri", "mongodb://127.0.0.1:27017")
+    val uri = conf(spark, "spark.sdeq.mongodb.uri", "mongodb://localhost:27017")
     val kafkaServers = conf(spark, "spark.sdeq.kafka.servers", "kafka:9092")
     val kafkaTopic = conf(spark, "spark.sdeq.kafka.topic", "updates")
     val trainingInterval = conf(spark, "spark.sdeq.train.interval", s"${5 * 60}").toInt
@@ -81,10 +84,13 @@ object Main extends Logging {
     )
 
     // parse kafka data into views and append them into mongo collection
-    val views = spark.read.
-      schema(schema).
-      csv(kafkaDF.select(col("value").cast("string")).as[String]).
-      as[Record]
+    val views = kafkaDF.
+      select(col("value").cast("string").as("value")).
+      select(split(col("value"), ",").as("value")).
+      select(
+        trim(col("value").getItem(0)).as("customer"),
+        trim(col("value").getItem(1)).as("product")
+      ).as[Record]
 
     val query = writeMongoStream(views, uri, DATABASE, CP_COLLECTION)
 
@@ -129,7 +135,7 @@ object Main extends Logging {
       logInfo(s"Located database $DATABASE and collection $CP_COLLECTION")
     }
 
-    if (!loadSimilarity(client)) {
+    if (loadSimilarity(client)) {
       logWarning("Could not find similarity collection, recomputing it")
 
       val ds = loadMongo(spark, uri, DATABASE, CP_COLLECTION).as[Record]
@@ -150,12 +156,12 @@ object Main extends Logging {
 
   /** Check if we need to load history files */
   private def loadHistoryFiles(client: MongoClient): Boolean = {
-    !databaseExists(client, DATABASE) || !collectionExists(client, DATABASE, CP_COLLECTION)
+    !collectionExists(client, DATABASE, CP_COLLECTION)
   }
 
   /** Check if we need to load similarity matrix */
   private def loadSimilarity(client: MongoClient): Boolean = {
-    !databaseExists(client, DATABASE) || !collectionExists(client, DATABASE, SIM_COLLECTION)
+    !collectionExists(client, DATABASE, SIM_COLLECTION)
   }
 
   /** Check if mongo database exists */
