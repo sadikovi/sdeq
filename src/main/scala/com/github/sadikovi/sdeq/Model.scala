@@ -80,17 +80,16 @@ private[sdeq] object Model {
     val similarities = matrix.columnSimilarities().entries.toDS
 
     // reconstruct products, so we can reference by product name, instead of index
-    val items = similarities
+    similarities
       .join(products, similarities("i") === products("j"))
       .select(col("product").as("p1"), similarities("j"), col("value"))
       .join(products, "j")
       .select(col("p1"), col("product").as("p2"), col("value")).as[Similarity]
-
-    items.cache
   }
 
   /**
    * Predict similar items sorted in descending order by their corresponding score.
+   * Make sure that items dataset is cached!
    * @param items similarity matrix
    * @param product product name to look up
    * @param top how many top predictions to return, default is 3
