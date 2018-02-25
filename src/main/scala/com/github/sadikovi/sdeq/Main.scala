@@ -187,7 +187,10 @@ object Main extends Logging {
 
   /** Shortcut for getting configuration option */
   private def conf(spark: SparkSession, key: String, default: String): String = {
-    spark.conf.getOption(key).getOrElse(default)
+    val value = spark.conf.getOption(key).getOrElse(default)
+    // also log options to make sure values are expected
+    logInfo(s"- option: $key, value: $value")
+    value
   }
 
   /** Check if we need to load history files */
