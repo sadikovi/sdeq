@@ -90,6 +90,7 @@ return arbitrary items, if we do not have score for it.
 
 ### Prerequisites
 To build the project and run the demo, following things are required:
+- Ubuntu 14.04/16.04 or OS X (tested on OS X and 16.04)
 - **sbt**, see https://www.scala-sbt.org/1.0/docs/Setup.html for more information
 - **Apache Spark 2.2.1**, you can download and install it from http://spark.apache.org/downloads.html
 - **Docker**, see https://docs.docker.com/install/ for more information
@@ -114,8 +115,10 @@ For tests run `sbt test` from the project root.
 ### Demo
 To run demo, follow the steps:
 - run `sbt assembly` to build the jar (see [Build](#build) section)
-- prepare Mongo DB by running `./sbin/run-mongo.sh` - this will launch container with Mongo
-- open connection to simulate streaming data by running `./sbin/run-stream.sh`, prepare to type some data in!
+- prepare Mongo DB by running `./sbin/run-mongo.sh` in a separate terminal window - this will launch
+container with Mongo
+- open connection to simulate streaming data by running `./sbin/run-stream.sh` in a separate terminal
+window, prepare to type some data in!
 - launch spark application, see commands and options below
 - issue some http requests to get model predictions!
 
