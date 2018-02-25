@@ -40,7 +40,7 @@ import com.mongodb.spark.config.WriteConfig
  * - "spark.sdeq.history.files", optional path to the history files/directory
  * - "spark.sdeq.stream.host", host to connect to for streaming data, default is "localhost"
  * - "spark.sdeq.stream.port", port to listen to for streaming data, default is "9999"
- * - "spark.sdeq.train.interval", training interval in seconds, default is "5 min"
+ * - "spark.sdeq.train.interval", training interval in seconds, default is "2 min"
  */
 object Main extends Logging {
   val DATABASE = "recommendations"
@@ -60,7 +60,7 @@ object Main extends Logging {
     val serverPort = conf(spark, "spark.sdeq.server.port", "28080")
     val streamHost = conf(spark, "spark.sdeq.stream.host", "localhost")
     val streamPort = conf(spark, "spark.sdeq.stream.port", "9999")
-    val trainingInterval = conf(spark, "spark.sdeq.train.interval", s"${5 * 60}").toInt
+    val trainingInterval = conf(spark, "spark.sdeq.train.interval", s"${2 * 60}").toInt
     val historyFiles = conf(spark, "spark.sdeq.history.files", "")
 
     require(trainingInterval >= 1, "Training interval must be greater than 1 second")
