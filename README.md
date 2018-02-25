@@ -10,6 +10,83 @@ Recommender challenge _(Senior Data Engineer Question)_.
 - [Demo](#demo)
 
 ### Architecture
+The goal is a bit vague based on the pdf description. I took an opportunity to summarize it and
+make it a little more interesting.
+
+Our goal is to build item-to-item based recommender system that should perform following functions:
+- On cold start, load data from historical files, it can be a single file or a partitioned directory
+of files, does not matter. The only requirement is that each file is a CSV file of following structure
+```
+customer,product
+C1,P101
+C1,P121
+...
+```
+Files also can contain duplicates.
+- On any subsequent start, we should not load data every time.
+- Recommendation system should be retrained offline, periodically, or online, whichever works better.
+- Model should be served via http requests, e.g. to display on a web page.
+- System in theory should scale to 50 million customers and tens of thousands of products.
+
+#### In theory
+This is what we are trying to build.
+```
+    +---------------+              +----------------------------------+
+    | History files |              | Stream of recent views or clicks |
+    +---------------+              | (a message bus, e.g. Kafka)      |
+     Load on startup               +----------------------------------+
+          |                                    |                   ^
+          |    +-------------------+           |                   |
+          +--> | Execution engine  | <---------+                  ... Data collected into Kafka
+               | Batch + streaming |                               |
+               +-------------------+                               |
+              We periodically train model                          |
+                        |      |                                   |
+                        |      |        +--------------+  GET   +-------------+
+                        |      +------> | Model server |------> | Web browser |
+                        |               +--------------+        +-------------+
+                        |
+              +-------------------+
+              | Scalable database |
+              | NoSQL or RDBMS    |
+              +-------------------+
+```
+
+We could go for some Lambda architecture, but it is overcomplicating things for this simple example
+of only one model and not particularly large input data. Of course, for companies like Amazon or
+Netflix, when there are dozens of systems in between, not this simple diagram.
+
+#### Why this scales
+For execution engine we use Apache Spark, no need to explain why it scales as long as code is written
+to take advantage of a cluster and parallelize operations as much as possible. We also cache model
+in memory to improve latency for the prediction queries.
+
+Both customer-product data and item-to-item data are stored in the database. We use Mongo, because
+it is just easy to set up and deal with, but an RDBMS could also work here, for example, sharded
+PostgreSQL or MySQL.
+
+Kafka gives high throughput and large volume processing. For our project at-least-once semantics
+are okay, Kafka would work great - we keep only unique records for processing.
+
+#### Simplifications for this project
+I simplified it a little bit. For example, I do not use Kafka in the demo, because, frankly, it is
+quite a task on its own to set it up properly:). Instead we use simple socket stream, very minor
+changes are required to connect to Kafka (couple of lines of code). We also use simple http server
+to serve requests. In production you would want something more robust - fortunately, there are a lot
+of frameworks out there for this.
+
+> Note that it is important to sort of design it around web server, or have it as a completely
+> different entity, otherwise it might be annoying to integrate later.
+
+#### What I would change
+- History data could be kept as Parquet files, so a job could periodically archive database data
+into this format.
+- Load history data based on missing records, not only once on a startup.
+- Update web server to something more robust and functional, add a load balancer.
+- Handle interesting cases like new customer, visited items and/or new products, right now we would
+return arbitrary items, if we do not have score for it.
+- Store only unique customer-product data to speed up computations.
+- Use Kafka instead of simple socket.
 
 ### Prerequisites
 To build the project and run the demo, following things are required:
@@ -21,7 +98,7 @@ To build the project and run the demo, following things are required:
 > need to run `./sbin/run-mongo.sh`, just update options to point to your database.
 
 ### Setup
-Just clone repository and `cd` into project root
+Clone repository and `cd` into project root
 ```sh
 git clone https://github.com/sadikovi/sdeq.git
 cd sdeq
@@ -77,6 +154,15 @@ curl "localhost:28080/predict?customer=C2&product=P999" && echo ""
 # example response
 # Customer C2 viewed P201, so might also like: P101 (0.0), P121 (0.0), P131 (0.0)
 ```
+
+To add more data into database from a stream, type something like this into `./sbin/run-stream.sh`
+terminal:
+```sh
+[Type record and hit Enter, e.g. 'C1,P234']
+C4,P234
+C1,P234
+```
+Wait for the next model update (approx. 2 min) to query the changes!
 
 #### What's happening
 This will load the data from history files, update model and start model server. Then it will listen
