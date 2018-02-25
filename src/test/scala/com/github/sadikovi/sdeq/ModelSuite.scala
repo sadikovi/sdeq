@@ -89,8 +89,23 @@ class ModelSuite extends UnitTestSuite {
 
     res = Model.predict(items, "P121", 0)
     res should be (Array.empty)
+  }
 
-    res = Model.predict(items, "UNKNOWN", 3)
-    res should be (Array.empty)
+  test("predict for a new product") {
+    val implicits = spark.implicits
+    import implicits._
+
+    val items = Seq(
+      Similarity("P131", "P201", 0.577),
+      Similarity("P101", "P121", 0.500),
+      Similarity("P121", "P131", 0.707),
+      Similarity("P101", "P201", 0.816),
+      Similarity("P121", "P201", 0.816),
+      Similarity("P101", "P131", 0.707)
+    ).toDS
+
+    var res = Model.predict(items, "P999", 3)
+    res.length should be (3)
+    res.map(_._2) should be (Array(0.0, 0.0, 0.0))
   }
 }

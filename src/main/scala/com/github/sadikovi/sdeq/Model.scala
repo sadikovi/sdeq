@@ -22,17 +22,6 @@ import org.apache.spark.sql.expressions.Window
 import org.apache.spark.sql.functions._
 
 /**
- * Input record type, we are only interested in customer and product pairs.
- */
-case class Record(customer: String, product: String)
-
-/**
- * Output type for the similarity matrix.
- * Each record represents i-j pair with the similarity value.
- */
-case class Similarity(p1: String, p2: String, value: Double)
-
-/**
  * Model to build matrix of cosine similarities for products and make predictions.
  */
 private[sdeq] object Model {
@@ -46,9 +35,10 @@ private[sdeq] object Model {
    */
   def index(ds: Dataset[String], inp: String, idx: String): Dataset[(String, Long)] = {
     import ds.sparkSession.implicits._
-    // Note that window functions could potentially be computationally expensive,
-    // it might be worth considering replacing this with `zipWithIndex`.
-    ds.distinct.withColumn(idx, dense_rank().over(Window.orderBy(inp)) - 1).as[(String, Long)]
+    // Note that window functions could potentially be computationally expensive as number of
+    // customers grows, so I changed "dense_rank().over(Window.orderBy(inp)) - 1)" to use
+    // `zipWithIndex` - this is slower, but scales better.
+    ds.distinct.rdd.zipWithIndex.toDF(inp, idx).as[(String, Long)]
   }
 
   /**
@@ -101,12 +91,27 @@ private[sdeq] object Model {
       top: Int = 3): Array[(String, Double)] = {
     import items.sparkSession.implicits._
 
-    items
+    val res = items
       .filter(col("p1") === product || col("p2") === product)
       .select(when(col("p1") === product, col("p2")).otherwise(col("p1")).as("item"), col("value"))
       .sort(col("value").desc)
       .limit(top)
       .as[(String, Double)]
       .collect
+
+    // Note that if we ask for a product that does not exist, we just return the first items with
+    // score of "0". This is okay for the toy example, but should be considered when building an
+    // actual app.
+    if (top > 0 && res.length == 0) {
+      items
+        .select("p1", "value")
+        .distinct
+        .limit(top)
+        .as[(String, Double)]
+        .collect
+        .map { case (product, value) => (product, 0.0) }
+    } else {
+      res
+    }
   }
 }
