@@ -66,7 +66,7 @@ it is just easy to set up and deal with, but an RDBMS could also work here, for 
 PostgreSQL or MySQL.
 
 Kafka gives high throughput and large volume processing. For our project at-least-once semantics
-are okay, Kafka would work great - we keep only unique records for processing.
+are okay, Kafka would work great - when computing similarity index we reduce to unique records.
 
 #### Simplifications for this project
 I simplified it a little bit. For example, I do not use Kafka in the demo, because, frankly, it is
@@ -143,7 +143,7 @@ some get requests to get predictions. For example, open another terminal and run
 ```sh
 curl "localhost:28080/predict?customer=C1&product=P101" && echo ""
 # example response
-# Customer C1 viewed P101, so might also like: P201 (0.816496580927726), P131 (0.7071067811865475), P234 (0.7071067811865475)
+# Customer C1 viewed P101, so might also like: P201 (0.816496580927726), P131 (0.7071067811865475), P121 (0.4999999999999999)
 
 curl "localhost:28080/predict?customer=C2&product=P201" && echo ""
 # example response
@@ -152,7 +152,7 @@ curl "localhost:28080/predict?customer=C2&product=P201" && echo ""
 # or try some non-existing product (we just report any 3)
 curl "localhost:28080/predict?customer=C2&product=P999" && echo ""
 # example response
-# Customer C2 viewed P201, so might also like: P101 (0.0), P121 (0.0), P131 (0.0)
+# Customer C2 viewed P999, so might also like: P201 (0.0), P121 (0.0), P131 (0.0)
 ```
 
 To add more data into database from a stream, type something like this into `./sbin/run-stream.sh`
