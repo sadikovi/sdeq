@@ -99,13 +99,11 @@ class ModelSuite extends UnitTestSuite {
       Similarity("P131", "P201", 0.577),
       Similarity("P101", "P121", 0.500),
       Similarity("P121", "P131", 0.707),
-      Similarity("P101", "P201", 0.816),
-      Similarity("P121", "P201", 0.816),
-      Similarity("P101", "P131", 0.707)
+      Similarity("P121", "P234", 0.123)
     ).toDS
 
     var res = Model.predict(items, "P999", 3)
     res.length should be (3)
-    res.map(_._2) should be (Array(0.0, 0.0, 0.0))
+    res.toSet should be (Set(("P131", 0.0), ("P101", 0.0), ("P121", 0.0)))
   }
 }

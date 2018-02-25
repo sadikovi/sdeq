@@ -104,12 +104,12 @@ private[sdeq] object Model {
     // actual app.
     if (top > 0 && res.length == 0) {
       items
-        .select("p1", "value")
+        .select("p1")
         .distinct
         .limit(top)
-        .as[(String, Double)]
+        .as[String]
         .collect
-        .map { case (product, value) => (product, 0.0) }
+        .map { product => (product, 0.0) }
     } else {
       res
     }

@@ -13,7 +13,9 @@ if [[ -n "$(docker ps --format '{{.Names}}' | grep mongo)" ]]; then
 fi
 
 if [[ -n "$(docker ps -a --format '{{.Names}}' | grep mongo)" ]]; then
+  echo "Removing old container first..."
   docker rm mongo
 fi
 
+echo "Launch Mongo docker container"
 docker run -p 27017:27017 --name mongo mongo:3.2
